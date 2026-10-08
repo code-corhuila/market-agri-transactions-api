@@ -1,0 +1,10 @@
+spring:
+  application:
+    name: transactions-api
+
+server:
+  port: ${SERVER_PORT:8080}
+
+logging:
+  pattern:
+    level: "%5p [correlationId:%X{correlationId:-}]"

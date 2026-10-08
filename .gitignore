@@ -1,0 +1,12 @@
+# Maven
+target/
+**/target/
+
+# Real secrets never enter the repository
+.env
+*.env
+!*.env.example
+*.pem
+
+# Logs and local output
+*.log
