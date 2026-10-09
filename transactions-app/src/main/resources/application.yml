@@ -15,3 +15,9 @@ server:
   tomcat:
     connection-timeout: 5s              # reading the request headers
     keep-alive-timeout: 60s             # idle connection
+
+# One JSON object per log line; the MDC (correlationId) goes into every line (Anexo C 5.3.9).
+logging:
+  structured:
+    format:
+      console: ecs
