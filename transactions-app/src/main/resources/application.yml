@@ -1,0 +1,17 @@
+# Composition root: every limit of the service is declared here, with its value (Anexo C 5.3.10).
+spring:
+  application:
+    name: market-agri-transactions-api
+  lifecycle:
+    timeout-per-shutdown-phase: 20s     # graceful shutdown
+  web:
+    resources:
+      add-mappings: false               # an API serves no static files
+  # The pool (10 connections, 5 s wait, 5 s per statement) is declared here with persistence (D3).
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful                    # finish in-flight requests before stopping
+  tomcat:
+    connection-timeout: 5s              # reading the request headers
+    keep-alive-timeout: 60s             # idle connection
