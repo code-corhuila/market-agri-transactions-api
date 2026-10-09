@@ -1,0 +1,26 @@
+# Included by market-agri-infra (Anexo G). No `ports`: only the API Gateway publishes one.
+
+services:
+  transactions-api:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    environment:
+      PORT: "8080"
+    expose:
+      - "8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 30s
+    # Longer than the 20 s graceful shutdown declared in application.yml.
+    stop_grace_period: 25s
+    restart: unless-stopped
+    networks: [platform]
+
+networks:
+  platform:
+    name: platform-${ENV:?set ENV}
+    external: true
