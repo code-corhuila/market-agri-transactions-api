@@ -17,6 +17,14 @@ deploy/                 Dockerfile and compose.yml, included by market-agri-infr
 its migrations live in `market-agri-transactions-db` (ADR-011); this service connects as
 `transactions_app` and never migrates.
 
+## What the scaffold already does
+
+| Rule | Where |
+|---|---|
+| `GET /health` → `200 {"status":"UP"}` without token (liveness, E-60) | `adapter/in/http/HealthController` |
+| One error body `{error, message, details, traceId}` from **one** handler (D-C21) | `adapter/in/http/ErrorHandler` |
+| `X-Correlation-Id` reused or generated, returned, as `traceId` and in every JSON log line (D-C28) | `adapter/in/http/CorrelationFilter` |
+
 ## Run locally
 
 ```bash
