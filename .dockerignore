@@ -1,5 +1,8 @@
-.git
-**/target
+**/target/
+.git/
+.github/
+.idea/
+.vscode/
 .env
-*.env
 *.pem
+keys/

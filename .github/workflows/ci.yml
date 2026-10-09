@@ -1,15 +1,12 @@
-name: API build
+name: CI
 
 on:
   pull_request:
     branches: [develop, qa, main]
+  workflow_dispatch:
 
 permissions:
   contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build:
@@ -23,5 +20,5 @@ jobs:
           distribution: temurin
           java-version: '21'
           cache: maven
-      - name: Build all modules
+      - name: Build and test all modules
         run: mvn -B -ntp verify

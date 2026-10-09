@@ -1,33 +1,26 @@
 # market-agri-transactions-api
 
-Transactions service API for the **Marketplace Agrícola Huila** distributed system. The service
-scaffold uses Java 21, Spring Boot, and three Maven modules to keep domain, application, and adapter
-code separate.
+Service API of the **transactions** domain (payments, ledger, Stripe webhook, outbox) of the
+**Marketplace Agrícola Huila** distributed system: Java 21, Spring Boot 3.5, hexagonal architecture in
+three Maven modules (Anexo C). Contract: `market-agri-docs/07-api/api-contract.md` §4.4.
 
 ## Modules
 
 ```
-domain/          transactions domain types and rules; no framework dependencies
-application/     use cases and inbound/outbound ports; depends on domain
-infrastructure/  Spring Boot entry point, HTTP adapters, and runtime configuration
+transactions-core/      domain/model, application/port/{in,out}, application/usecase — plain Java, no framework
+transactions-adapters/  adapter/in/http, adapter/out/persistence
+transactions-app/       composition root: entry point, wiring and every limit (application.yml)
+deploy/                 Dockerfile and compose.yml, included by market-agri-infra (no host port)
 ```
 
-The API does not own database schema or migrations. Those live in `market-agri-transactions-db`;
-database changes are applied deliberately before deploying this service.
+`transactions-core` declares no framework: a Spring or JDBC type there does not compile. The schema and
+its migrations live in `market-agri-transactions-db` (ADR-011); this service connects as
+`transactions_app` and never migrates.
 
 ## Run locally
 
 ```bash
-mvn -B -ntp verify
-docker compose -f deploy/compose.yml config
-docker compose -f deploy/compose.yml up --build
+./mvnw -B verify                      # build and tests (Windows: mvnw.cmd)
+java -jar transactions-app/target/transactions-app-0.0.1-SNAPSHOT.jar
+curl -i http://localhost:8080/health  # liveness, no token
 ```
-
-The container exposes port 8080 only inside the platform network. `GET /health` returns the service
-health. Requests receive an `X-Correlation-Id`; a valid supplied value is preserved, otherwise the
-service generates a UUID. API errors use a consistent JSON envelope.
-
-## Branching
-
-Work enters `develop` through a child branch and Pull Request. Promotion to `qa` and `main` follows
-the project Git guide and uses re-application with `cherry-pick -x`; do not merge permanent branches.

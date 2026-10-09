@@ -1,12 +1,16 @@
 # Maven
 target/
-**/target/
+.mvn/wrapper/maven-wrapper.jar
 
-# Real secrets never enter the repository
+# IDE
+.idea/
+*.iml
+.vscode/
+.settings/
+.project
+.classpath
+
+# Secrets never enter the repository
 .env
-*.env
-!*.env.example
 *.pem
-
-# Logs and local output
-*.log
+keys/
