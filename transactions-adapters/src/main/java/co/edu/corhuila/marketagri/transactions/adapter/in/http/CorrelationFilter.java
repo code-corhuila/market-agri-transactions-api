@@ -7,6 +7,8 @@ import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
@@ -23,6 +25,8 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class CorrelationFilter extends OncePerRequestFilter {
 
+    private static final Logger LOG = LoggerFactory.getLogger(CorrelationFilter.class);
+
     public static final String HEADER = "X-Correlation-Id";
     public static final String MDC_KEY = "correlationId";
     private static final Pattern SAFE_ID = Pattern.compile("[A-Za-z0-9._-]{1,128}");
@@ -38,6 +42,10 @@ public class CorrelationFilter extends OncePerRequestFilter {
         request.setAttribute(HEADER, correlationId);
         response.setHeader(HEADER, correlationId);
         MDC.put(MDC_KEY, correlationId);
+        if (received != null && !received.equals(correlationId)) {
+            // Only the length: the rejected value itself is what must never reach the log.
+            LOG.warn("Rejected unsafe X-Correlation-Id of {} characters; generated a new one", received.length());
+        }
         try {
             chain.doFilter(request, response);
         } finally {

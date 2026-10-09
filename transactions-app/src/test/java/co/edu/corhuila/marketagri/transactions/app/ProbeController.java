@@ -13,7 +13,9 @@ import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Test-only routes that exercise the error body before the real endpoints exist (D3–D5).
+ * Test-only routes for the cross-cutting HTTP adapter (error body, validation, correlation).
+ * They are kept after the real endpoints exist (D3–D5): they test the handler and the filter on
+ * their own, so a change in a business route never hides a regression of the contract body.
  * It lives in the test sources: it never reaches the jar.
  */
 @RestController
