@@ -1,5 +1,6 @@
 package co.edu.corhuila.marketagri.transactions.app;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
 import static org.hamcrest.Matchers.matchesPattern;
@@ -13,9 +14,12 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.system.CapturedOutput;
+import org.springframework.boot.test.system.OutputCaptureExtension;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -25,6 +29,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@ExtendWith(OutputCaptureExtension.class)
 class TransactionsHttpTest {
 
     private static final String UUID_PATTERN =
@@ -99,6 +104,15 @@ class TransactionsHttpTest {
     }
 
     @Test
+    void unsupportedMediaTypeIs400ValidationErrorInStatusAndBody() throws Exception {
+        // Spring raises 415; the contract has no such code, so status and body both say 400.
+        http.perform(post("/probe").header("Idempotency-Key", "key-12345678")
+                        .contentType(MediaType.TEXT_PLAIN).content("reference=r-1"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"));
+    }
+
+    @Test
     void malformedIdIs400ValidationError() throws Exception {
         http.perform(get("/probe/not-a-uuid"))
                 .andExpect(status().isBadRequest())
@@ -107,11 +121,13 @@ class TransactionsHttpTest {
     }
 
     @Test
-    void unexpectedErrorIsNeutral500() throws Exception {
+    void unexpectedErrorIsNeutral500AndOnlyTheLogKeepsTheDetail(CapturedOutput log) throws Exception {
         http.perform(get("/probe/failure"))
                 .andExpect(status().isInternalServerError())
                 .andExpect(jsonPath("$.error").value("INTERNAL_ERROR"))
                 .andExpect(jsonPath("$.message").value("Ocurrió un error inesperado."))
-                .andExpect(content().string(not(containsString("SELECT"))));
+                .andExpect(jsonPath("$.details", hasSize(0)))
+                .andExpect(content().string(not(containsString("secret_table"))));
+        assertThat(log.getOut()).contains("transactions.secret_table");
     }
 }
