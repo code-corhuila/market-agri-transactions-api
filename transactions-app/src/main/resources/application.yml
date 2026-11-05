@@ -20,6 +20,10 @@ spring:
   sql:
     init:
       mode: never                       # no schema.sql or data.sql, ever (norm 5.2.1)
+  # unitPriceCents is an integer (ADR-029): 12.5 is 400, not silently 12 (Jackson's default accepts it).
+  jackson:
+    deserialization:
+      accept-float-as-int: false
 
 server:
   port: ${PORT:8080}
@@ -34,6 +38,15 @@ jwt:
   issuer: ${JWT_ISSUER}
   public-key: ${JWT_PUBLIC_KEY:}
   public-key-file: ${JWT_PUBLIC_KEY_FILE:}
+
+# Payment provider (ADR-019): wompi (Web Checkout) or fake (CI, integration, E2E). The Wompi keys
+# live only in market-agri-infra/env/<env>.env; the buyer comes back to PUBLIC_BASE_URL/transacciones/<id>.
+payment:
+  gateway: ${PAYMENT_GATEWAY:}
+  public-base-url: ${PUBLIC_BASE_URL:}
+  wompi:
+    public-key: ${WOMPI_PUBLIC_KEY:}
+    integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
 
 # One JSON object per log line; the MDC (correlationId) goes into every line (Anexo C 5.3.9).
 logging:
