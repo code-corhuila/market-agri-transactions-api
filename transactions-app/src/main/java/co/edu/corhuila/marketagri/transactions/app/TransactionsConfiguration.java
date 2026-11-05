@@ -4,10 +4,16 @@ import co.edu.corhuila.marketagri.transactions.adapter.in.http.PublicKeys;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
+import co.edu.corhuila.marketagri.transactions.adapter.out.payment.FakePaymentGateway;
+import co.edu.corhuila.marketagri.transactions.adapter.out.payment.RedirectUrls;
+import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiPaymentGateway;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.SpringUnitOfWork;
+import co.edu.corhuila.marketagri.transactions.application.port.in.CreatePayment;
+import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentGateway;
 import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
+import co.edu.corhuila.marketagri.transactions.application.usecase.CreatePaymentService;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
@@ -54,6 +60,29 @@ public class TransactionsConfiguration {
     @Bean
     TransactionCreations transactionCreations(JdbcClient jdbc) {
         return new JdbcTransactionCreations(jdbc);
+    }
+
+    /**
+     * The provider of the payments (ADR-019), by {@code PAYMENT_GATEWAY}: {@code wompi} or
+     * {@code fake}. Any other value, or none, and the service does not start.
+     */
+    @Bean
+    PaymentGateway paymentGateway(@Value("${payment.gateway:}") String gateway,
+                                  @Value("${payment.public-base-url:}") String publicBaseUrl,
+                                  @Value("${payment.wompi.public-key:}") String wompiPublicKey,
+                                  @Value("${payment.wompi.integrity-secret:}") String wompiIntegritySecret) {
+        RedirectUrls redirects = new RedirectUrls(publicBaseUrl);
+        return switch (gateway) {
+            case "wompi" -> new WompiPaymentGateway(wompiPublicKey, wompiIntegritySecret, redirects);
+            case "fake" -> new FakePaymentGateway(redirects);
+            default -> throw new IllegalStateException("Set PAYMENT_GATEWAY to wompi or fake, not '" + gateway + "'");
+        };
+    }
+
+    /** I-06; the clock is UTC, and the aggregate cuts it to seconds. */
+    @Bean
+    CreatePayment createPayment(TransactionCreations creations, PaymentGateway gateway, UnitOfWork unitOfWork) {
+        return new CreatePaymentService(creations, gateway, unitOfWork, Clock.systemUTC());
     }
 
     /** Spring Boot's transaction manager of the DataSource: the same connection JdbcClient uses. */

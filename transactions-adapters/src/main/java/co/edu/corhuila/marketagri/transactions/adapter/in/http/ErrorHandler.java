@@ -1,6 +1,8 @@
 package co.edu.corhuila.marketagri.transactions.adapter.in.http;
 
+import co.edu.corhuila.marketagri.transactions.domain.model.DomainException;
 import java.util.List;
+import java.util.Optional;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
@@ -22,7 +24,7 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExcep
  * The single place where an exception becomes an HTTP response (Anexo C, api-contract §2).
  * Spring's own exceptions (404 route, 405, malformed JSON, type mismatch, missing header…)
  * arrive through {@link #handleExceptionInternal}; anything else, through
- * {@link #handleUnexpected}. Domain errors will be mapped here too, never in a controller.
+ * {@link #handleUnexpected}. Domain errors are mapped here too, never in a controller.
  */
 @RestControllerAdvice
 public class ErrorHandler extends ResponseEntityExceptionHandler {
@@ -64,6 +66,30 @@ public class ErrorHandler extends ResponseEntityExceptionHandler {
     public ResponseEntity<Object> handleForbidden(ForbiddenException exception, WebRequest request) {
         LOG.warn("Denied: {}", exception.getMessage());
         return body(ErrorCode.FORBIDDEN, List.of(), HttpHeaders.EMPTY, request);
+    }
+
+    /** A header out of range ({@code Idempotency-Key}), named in {@code details}. */
+    @ExceptionHandler(InvalidParameterException.class)
+    public ResponseEntity<Object> handleInvalidParameter(InvalidParameterException exception, WebRequest request) {
+        List<ApiError.FieldDetail> details = List.of(new ApiError.FieldDetail(exception.field(), exception.getMessage()));
+        return body(ErrorCode.VALIDATION_ERROR, details, HttpHeaders.EMPTY, request);
+    }
+
+    /**
+     * A broken rule of the core, with its contract code ({@link DomainError}). A code without a
+     * row is a bug: it answers 500 and is logged. A gateway error is logged too: its cause is ours.
+     */
+    @ExceptionHandler(DomainException.class)
+    public ResponseEntity<Object> handleDomain(DomainException exception, WebRequest request) {
+        Optional<DomainError> known = DomainError.of(exception.code());
+        if (known.isEmpty()) {
+            return handleUnexpected(exception, request);
+        }
+        if (known.get() == DomainError.PAYMENT_GATEWAY_ERROR) {
+            LOG.error("Payment gateway: {}", exception.getMessage());
+        }
+        ApiError error = new ApiError(exception.code(), known.get().message(), List.of(), traceId(request));
+        return ResponseEntity.status(known.get().status()).body(error);
     }
 
     /** Last resort: neutral message to the client, full detail only in the log (NFR-039). */
