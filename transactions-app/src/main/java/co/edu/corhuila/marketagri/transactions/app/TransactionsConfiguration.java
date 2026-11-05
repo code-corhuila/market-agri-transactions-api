@@ -2,12 +2,22 @@ package co.edu.corhuila.marketagri.transactions.app;
 
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.PublicKeys;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.Rs256Verifier;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.SpringUnitOfWork;
+import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
+import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
+import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
+import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.transaction.PlatformTransactionManager;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * The only place that knows the concrete types: use cases of the core are wired to the
@@ -33,5 +43,22 @@ public class TransactionsConfiguration {
             throw new IllegalStateException("Set JWT_PUBLIC_KEY or JWT_PUBLIC_KEY_FILE");
         }
         return new Rs256Verifier(key, issuer, Clock.systemUTC());
+    }
+
+    /** E-61: transactions answers only with its database up ({@code broker} joins with the relay, D4a). */
+    @Bean
+    ReadinessCheck databaseCheck(DataSource dataSource) {
+        return new JdbcDatabaseCheck(dataSource);
+    }
+
+    @Bean
+    TransactionCreations transactionCreations(JdbcClient jdbc) {
+        return new JdbcTransactionCreations(jdbc);
+    }
+
+    /** Spring Boot's transaction manager of the DataSource: the same connection JdbcClient uses. */
+    @Bean
+    UnitOfWork unitOfWork(PlatformTransactionManager transactionManager) {
+        return new SpringUnitOfWork(new TransactionTemplate(transactionManager));
     }
 }

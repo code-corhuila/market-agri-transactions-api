@@ -7,12 +7,18 @@ services:
       dockerfile: deploy/Dockerfile
     environment:
       PORT: "8080"
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${PG_DATABASE:?set PG_DATABASE}
+      DATABASE_USER: transactions_app
+      DATABASE_PASSWORD: ${TRANSACTIONS_APP_PASSWORD:?set TRANSACTIONS_APP_PASSWORD}
       JWT_ISSUER: ${JWT_ISSUER:?set JWT_ISSUER}
       JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY}
+    depends_on:                       # postgres lives in market-agri-infra; resolved when included
+      postgres:
+        condition: service_healthy
     expose:
       - "8080"
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health"]
+    healthcheck:                      # readiness: healthy only when the database answers (D-C20)
+      test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
       interval: 10s
       timeout: 3s
       retries: 5

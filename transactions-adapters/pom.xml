@@ -12,7 +12,7 @@
     <artifactId>transactions-adapters</artifactId>
     <description>Inbound HTTP adapter and outbound adapters. They implement the ports of the core.</description>
 
-    <!-- JDBC, the PostgreSQL driver and the broker client arrive with the first use case that needs them (D3, D4). -->
+    <!-- The broker client arrives with the outbox relay (D4a). -->
     <dependencies>
         <dependency>
             <groupId>co.edu.corhuila.marketagri</groupId>
@@ -26,6 +26,16 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
+        </dependency>
+        <!-- Plain JDBC with the Hikari pool: no JPA, the schema belongs to transactions-db (ADR-011). -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-jdbc</artifactId>
+        </dependency>
+        <!-- Compile scope: the adapter reads the violated constraint from PSQLException (D-21). -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
         </dependency>
 
         <dependency>
