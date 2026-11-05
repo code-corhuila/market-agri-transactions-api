@@ -1,11 +1,17 @@
 package co.edu.corhuila.marketagri.transactions.app;
 
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
+import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
+import co.edu.corhuila.marketagri.transactions.domain.model.Page;
+import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
+import co.edu.corhuila.marketagri.transactions.domain.model.TransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionInProgressException;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionStatus;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.List;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -14,9 +20,13 @@ import java.util.function.Supplier;
 
 /**
  * The persistence ports in memory for the HTTP tests, with the rules of the real tables: the id
- * first (ON CONFLICT), then the partial index of D-21, and a rollback when the work throws.
+ * first (ON CONFLICT), then the partial index of D-21, a rollback when the work throws, and the
+ * order of E-42 ({@code createdAt} descending, then {@code id}).
  */
-final class InMemoryTransactions implements TransactionCreations, UnitOfWork {
+final class InMemoryTransactions implements TransactionCreations, TransactionRepository, UnitOfWork {
+
+    private static final Comparator<Transaction> E42_ORDER =
+            Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id);
 
     private final Map<UUID, Transaction> transactions = new LinkedHashMap<>();
     private final Map<String, UUID> keys = new HashMap<>();
@@ -68,5 +78,17 @@ final class InMemoryTransactions implements TransactionCreations, UnitOfWork {
     @Override
     public synchronized Optional<Transaction> transactionForKey(UUID callerId, String idempotencyKey) {
         return Optional.ofNullable(keys.get(callerId + "/" + idempotencyKey)).map(transactions::get);
+    }
+
+    @Override
+    public synchronized Optional<Transaction> findById(UUID id) {
+        return Optional.ofNullable(transactions.get(id));
+    }
+
+    @Override
+    public synchronized Page<Transaction> findPage(TransactionFilter filter, PageRequest request) {
+        List<Transaction> matching = transactions.values().stream().filter(filter::matches).sorted(E42_ORDER).toList();
+        return new Page<>(matching.stream().skip(request.offset()).limit(request.limit()).toList(), request,
+                matching.size());
     }
 }
