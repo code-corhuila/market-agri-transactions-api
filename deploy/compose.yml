@@ -7,6 +7,8 @@ services:
       dockerfile: deploy/Dockerfile
     environment:
       PORT: "8080"
+      JWT_ISSUER: ${JWT_ISSUER:?set JWT_ISSUER}
+      JWT_PUBLIC_KEY: ${JWT_PUBLIC_KEY:?set JWT_PUBLIC_KEY}
     expose:
       - "8080"
     healthcheck:
