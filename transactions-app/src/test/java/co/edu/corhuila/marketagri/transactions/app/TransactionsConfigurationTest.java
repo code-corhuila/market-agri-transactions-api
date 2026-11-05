@@ -17,6 +17,22 @@ class TransactionsConfigurationTest {
     }
 
     @Test
+    void refusesToStartWithAnUnknownPaymentGateway() {
+        assertThatThrownBy(() -> configuration.paymentGateway("stripe", "http://localhost:8001", "", ""))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("PAYMENT_GATEWAY");
+        assertThatThrownBy(() -> configuration.paymentGateway("", "http://localhost:8001", "", ""))
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void refusesToStartWithoutThePublicBaseUrl() {
+        assertThatThrownBy(() -> configuration.paymentGateway("fake", "", "", ""))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("PUBLIC_BASE_URL");
+    }
+
+    @Test
     void refusesToStartWithoutAnIssuer() {
         assertThatThrownBy(() -> configuration.tokenVerifier(" ", TestTokens.publicKeyOnOneLine(), ""))
                 .isInstanceOf(IllegalArgumentException.class)
