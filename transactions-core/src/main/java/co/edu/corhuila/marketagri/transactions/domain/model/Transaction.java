@@ -56,6 +56,13 @@ public record Transaction(UUID id, PurchaseSnapshot purchase, Money amount, Tran
                 null, createdAt);
     }
 
+    /** E-41: only its buyer or its producer may read it (the caller comes from the token, never from the request). */
+    public void ensureParticipant(UUID userId) {
+        if (!userId.equals(purchase.buyerId()) && !userId.equals(purchase.producerId())) {
+            throw new NotAParticipantException(id);
+        }
+    }
+
     /** True for a payment that never reached the provider; a replay of it gets the same error. */
     public boolean neverOpened() {
         return status == TransactionStatus.FAILED && createdAt.equals(failedAt) && gatewayTransactionId == null;
