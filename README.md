@@ -26,6 +26,7 @@ its migrations live in `market-agri-transactions-db` (ADR-011); this service con
 | `X-Correlation-Id` reused or generated, returned, as `traceId` and in every JSON log line (D-C28) | `adapter/in/http/CorrelationFilter` |
 | `GET /health/ready` → `200`/`503` with `checks.database` (E-61; `broker` joins with the relay) | `adapter/in/http/HealthController`, `JdbcDatabaseCheck` |
 | I-06 `POST /internal/v1/transactions` (`SERVICE` only): `201`/`200` with `{transaction, checkoutUrl}` | `adapter/in/http/InternalTransactionController` |
+| E-41 `GET /api/v1/transactions/{id}` (participant only) and E-42 `GET /api/v1/transactions/mine` (purchases or sales, `status`, `page`, `limit`) | `adapter/in/http/TransactionController`, `JdbcTransactionRepository` |
 | Checkout link of Wompi Web Checkout signed with SHA-256, or the fake one, by `PAYMENT_GATEWAY` (ADR-019) | `adapter/out/payment/WompiPaymentGateway`, `FakePaymentGateway` |
 | Payment and `Idempotency-Key` in one transaction; the partial index → `TRANSACTION_IN_PROGRESS` (I-06, D-21) | `adapter/out/persistence/JdbcTransactionCreations` |
 

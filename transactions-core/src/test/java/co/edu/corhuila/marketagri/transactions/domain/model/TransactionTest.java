@@ -70,6 +70,17 @@ class TransactionTest {
     }
 
     @Test
+    void itsBuyerAndItsProducerMayReadItAndNobodyElse() {
+        Transaction transaction = Transaction.open(ID, purchase("1"), NOW);
+
+        transaction.ensureParticipant(transaction.purchase().buyerId());
+        transaction.ensureParticipant(transaction.purchase().producerId());
+        assertThatThrownBy(() -> transaction.ensureParticipant(UUID.randomUUID()))
+                .isInstanceOfSatisfying(DomainException.class,
+                        refused -> assertThat(refused.code()).isEqualTo("NOT_A_PARTICIPANT"));
+    }
+
+    @Test
     void rebuildingRefusesTimestampsThatDoNotMatchTheStatus() {
         assertThatThrownBy(() -> new Transaction(ID, purchase("1"), Money.ofCents(8_500_000),
                 TransactionStatus.CONFIRMED, PaymentMethod.CARD, "wompi-1", CREATED,

@@ -4,16 +4,20 @@ import co.edu.corhuila.marketagri.transactions.adapter.in.http.PublicKeys;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionRepository;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.FakePaymentGateway;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.RedirectUrls;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiPaymentGateway;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.SpringUnitOfWork;
 import co.edu.corhuila.marketagri.transactions.application.port.in.CreatePayment;
+import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransactions;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentGateway;
 import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
+import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import co.edu.corhuila.marketagri.transactions.application.usecase.CreatePaymentService;
+import co.edu.corhuila.marketagri.transactions.application.usecase.ReadTransactionsService;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPublicKey;
 import java.time.Clock;
@@ -83,6 +87,17 @@ public class TransactionsConfiguration {
     @Bean
     CreatePayment createPayment(TransactionCreations creations, PaymentGateway gateway, UnitOfWork unitOfWork) {
         return new CreatePaymentService(creations, gateway, unitOfWork, Clock.systemUTC());
+    }
+
+    @Bean
+    TransactionRepository transactionRepository(JdbcClient jdbc) {
+        return new JdbcTransactionRepository(jdbc);
+    }
+
+    /** E-41 and E-42. */
+    @Bean
+    ReadTransactions readTransactions(TransactionRepository transactions) {
+        return new ReadTransactionsService(transactions);
     }
 
     /** Spring Boot's transaction manager of the DataSource: the same connection JdbcClient uses. */
