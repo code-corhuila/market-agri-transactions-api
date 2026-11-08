@@ -17,6 +17,9 @@ public record Transaction(UUID id, PurchaseSnapshot purchase, Money amount, Tran
     /** ADR-019: the Web Checkout link expires 30 minutes after the payment is created. */
     public static final Duration CHECKOUT_WINDOW = Duration.ofMinutes(30);
 
+    /** The currency of every payment (ADR-019); the provider must answer in it too. */
+    public static final String CURRENCY = "COP";
+
     public Transaction {
         Objects.requireNonNull(id, "id");
         Objects.requireNonNull(status, "status");
@@ -54,6 +57,45 @@ public record Transaction(UUID id, PurchaseSnapshot purchase, Money amount, Tran
         }
         return new Transaction(id, purchase, amount, TransactionStatus.FAILED, null, null, createdAt, expiresAt,
                 null, createdAt);
+    }
+
+    /** CONFIRMED and FAILED are terminal (AGGR-INV-005). */
+    public boolean isPending() {
+        return status == TransactionStatus.PENDING;
+    }
+
+    /**
+     * An approved result of the provider confirms the payment (E-43, AGGR-INV-004), after the
+     * guards of the contract: the same amount and currency. The instant is cut to whole seconds.
+     */
+    public Transaction confirm(PaymentResult result, Instant now) {
+        requireSettleable(result, PaymentOutcome.APPROVED);
+        if (result.amountCents() != amount.cents()) {
+            throw new PaymentResultMismatchException("amount " + result.amountCents() + " is not " + amount.cents()
+                    + " for " + id);
+        }
+        if (!CURRENCY.equals(result.currency())) {
+            throw new PaymentResultMismatchException("currency " + result.currency() + " is not " + CURRENCY
+                    + " for " + id);
+        }
+        return new Transaction(id, purchase, amount, TransactionStatus.CONFIRMED, result.paymentMethod(),
+                result.gatewayTransactionId(), createdAt, expiresAt, now.truncatedTo(ChronoUnit.SECONDS), null);
+    }
+
+    /** A rejected result of the provider (declined, voided or an error) fails the payment (E-43). */
+    public Transaction fail(PaymentResult result, Instant now) {
+        requireSettleable(result, PaymentOutcome.REJECTED);
+        return new Transaction(id, purchase, amount, TransactionStatus.FAILED, result.paymentMethod(),
+                result.gatewayTransactionId(), createdAt, expiresAt, null, now.truncatedTo(ChronoUnit.SECONDS));
+    }
+
+    private void requireSettleable(PaymentResult result, PaymentOutcome expected) {
+        if (!isPending()) {
+            throw new IllegalStateException(status + " is terminal (AGGR-INV-005): " + id);
+        }
+        if (result.outcome() != expected) {
+            throw new IllegalArgumentException("a " + result.outcome() + " result cannot settle as " + expected);
+        }
     }
 
     /** E-41: only its buyer or its producer may read it (the caller comes from the token, never from the request). */
