@@ -1,6 +1,7 @@
 package co.edu.corhuila.marketagri.transactions.application.usecase;
 
 import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult;
+import co.edu.corhuila.marketagri.transactions.application.port.out.Ledger;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import co.edu.corhuila.marketagri.transactions.domain.model.FailureReason;
@@ -16,19 +17,22 @@ import java.util.function.Supplier;
 
 /**
  * E-43 in the core: the payment is locked, the result is checked against it, and the new state
- * and its event are stored in the same transaction (transactional outbox, ADR-014). Anything that
+ * and its event are stored in the same transaction (transactional outbox, ADR-014), with the
+ * producer's ledger entry when it is confirmed (AGGR-INV-006). Anything that
  * does not settle a PENDING payment changes nothing, so a redelivered event is harmless.
  */
 public final class ApplyPaymentResultService implements ApplyPaymentResult {
 
     private final PaymentSettlements settlements;
+    private final Ledger ledger;
     private final UnitOfWork unitOfWork;
     private final Supplier<UUID> eventIds;
     private final Clock clock;
 
-    public ApplyPaymentResultService(PaymentSettlements settlements, UnitOfWork unitOfWork,
+    public ApplyPaymentResultService(PaymentSettlements settlements, Ledger ledger, UnitOfWork unitOfWork,
                                      Supplier<UUID> eventIds, Clock clock) {
         this.settlements = settlements;
+        this.ledger = ledger;
         this.unitOfWork = unitOfWork;
         this.eventIds = eventIds;
         this.clock = clock;
@@ -89,6 +93,7 @@ public final class ApplyPaymentResultService implements ApplyPaymentResult {
         }
         settlements.settle(confirmed, TransactionEvent.confirmed(eventIds.get(), confirmed, command.correlationId(),
                 causationId));
+        ledger.add(confirmed.ledgerEntry());
         return Outcome.CONFIRMED;
     }
 }

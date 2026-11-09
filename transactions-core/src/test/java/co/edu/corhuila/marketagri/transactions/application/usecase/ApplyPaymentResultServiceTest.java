@@ -1,12 +1,14 @@
 package co.edu.corhuila.marketagri.transactions.application.usecase;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult.Command;
 import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult.Outcome;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import co.edu.corhuila.marketagri.transactions.domain.model.FailureReason;
+import co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry;
 import co.edu.corhuila.marketagri.transactions.domain.model.Money;
 import co.edu.corhuila.marketagri.transactions.domain.model.PaymentMethod;
 import co.edu.corhuila.marketagri.transactions.domain.model.PaymentOutcome;
@@ -46,6 +48,8 @@ class ApplyPaymentResultServiceTest {
     private static final class FakeStore implements UnitOfWork, PaymentSettlements {
         final Map<UUID, Transaction> transactions = new LinkedHashMap<>();
         final List<TransactionEvent> outbox = new ArrayList<>();
+        final List<LedgerEntry> ledger = new ArrayList<>();
+        boolean ledgerBroken;
         int units;
         private boolean open;
 
@@ -53,6 +57,7 @@ class ApplyPaymentResultServiceTest {
         public <T> T inTransaction(Supplier<T> work) {
             Map<UUID, Transaction> before = new LinkedHashMap<>(transactions);
             List<TransactionEvent> outboxBefore = new ArrayList<>(outbox);
+            List<LedgerEntry> ledgerBefore = new ArrayList<>(ledger);
             open = true;
             units++;
             try {
@@ -62,6 +67,8 @@ class ApplyPaymentResultServiceTest {
                 transactions.putAll(before);
                 outbox.clear();
                 outbox.addAll(outboxBefore);
+                ledger.clear();
+                ledger.addAll(ledgerBefore);
                 throw rollback;
             } finally {
                 open = false;
@@ -86,11 +93,20 @@ class ApplyPaymentResultServiceTest {
             transactions.put(settled.id(), settled);
             outbox.add(event);
         }
+
+        /** The ledger shares the unit of work; when broken it fails like a refused statement. */
+        void addToLedger(LedgerEntry entry) {
+            assertThat(open).as("ledger entry inside the unit of work").isTrue();
+            if (ledgerBroken) {
+                throw new IllegalStateException("ledger_entry refused the row");
+            }
+            ledger.add(entry);
+        }
     }
 
     private final FakeStore store = new FakeStore();
     private final ApplyPaymentResultService service =
-            new ApplyPaymentResultService(store, store, () -> EVENT, Clock.fixed(NOW, ZoneOffset.UTC));
+            new ApplyPaymentResultService(store, store::addToLedger, store, () -> EVENT, Clock.fixed(NOW, ZoneOffset.UTC));
 
     private static Transaction pending(UUID id) {
         PurchaseSnapshot purchase = new PurchaseSnapshot(UUID.randomUUID(), UUID.randomUUID(), "Carlos Pérez",
@@ -118,6 +134,45 @@ class ApplyPaymentResultServiceTest {
             assertThat(event.correlationId()).isEqualTo("corr-1");
             assertThat(event.causationId()).isEqualTo("w-1");
         });
+    }
+
+    @Test
+    void aConfirmationWritesExactlyOneLedgerEntryForTheProducerInTheSameUnitOfWork() {
+        store.transactions.put(TX, pending(TX));
+
+        service.apply(command(TX, PaymentOutcome.APPROVED, AMOUNT, "w-1"));
+        service.apply(command(TX, PaymentOutcome.APPROVED, AMOUNT, "w-1"));
+
+        Transaction confirmed = store.transactions.get(TX);
+        assertThat(store.ledger).singleElement().isEqualTo(confirmed.ledgerEntry());
+        assertThat(store.ledger.get(0).producerId()).isEqualTo(confirmed.purchase().producerId());
+        assertThat(store.ledger.get(0).grossAmount().cents()).isEqualTo(AMOUNT);
+    }
+
+    @Test
+    void noLedgerEntryWithoutAConfirmation() {
+        store.transactions.put(TX, pending(TX));
+        store.transactions.put(OTHER_TX, pending(OTHER_TX));
+
+        service.apply(command(TX, PaymentOutcome.REJECTED, AMOUNT, "w-1"));
+        service.apply(command(OTHER_TX, PaymentOutcome.APPROVED, AMOUNT + 1, "w-2"));
+        service.apply(command(OTHER_TX, PaymentOutcome.PENDING, AMOUNT, "w-2"));
+        service.expire(OTHER_TX, "corr-2");
+
+        assertThat(store.ledger).isEmpty();
+    }
+
+    @Test
+    void ifTheLedgerEntryCannotBeWrittenThePaymentStaysPendingWithoutItsEvent() {
+        store.transactions.put(TX, pending(TX));
+        store.ledgerBroken = true;
+
+        assertThatThrownBy(() -> service.apply(command(TX, PaymentOutcome.APPROVED, AMOUNT, "w-1")))
+                .isInstanceOf(IllegalStateException.class);
+
+        assertThat(store.transactions.get(TX).isPending()).isTrue();
+        assertThat(store.outbox).isEmpty();
+        assertThat(store.ledger).isEmpty();
     }
 
     @Test
