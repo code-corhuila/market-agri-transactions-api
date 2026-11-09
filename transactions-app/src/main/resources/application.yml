@@ -49,6 +49,22 @@ payment:
     integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
     events-secret: ${WOMPI_EVENTS_SECRET:}       # checksum of the events of E-43
 
+# Broker of the domain events (ADR-004, ADR-014): RabbitMQ of market-agri-infra, as transactions_app,
+# which may only publish to market-agri.events. Without these variables the service does not start.
+broker:
+  host: ${RABBITMQ_HOST}
+  port: ${RABBITMQ_PORT:5672}
+  username: ${BROKER_USERNAME}
+  password: ${BROKER_PASSWORD}
+  timeout: 3s                           # connection, handshake and waiting for the confirm
+
+# Outbox relay (ADR-014): every second, at most 50 events per run, oldest first.
+outbox:
+  relay:
+    enabled: true
+    interval: 1000                      # ms between the end of a run and the next one
+    batch-size: 50
+
 # One JSON object per log line; the MDC (correlationId) goes into every line (Anexo C 5.3.9).
 logging:
   structured:
