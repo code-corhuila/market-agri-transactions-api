@@ -48,6 +48,12 @@ payment:
     public-key: ${WOMPI_PUBLIC_KEY:}
     integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
     events-secret: ${WOMPI_EVENTS_SECRET:}       # checksum of the events of E-43
+    private-key: ${WOMPI_PRIVATE_KEY:}            # the expiry job's query by reference
+    api-url: ${WOMPI_API_URL:https://sandbox.wompi.co/v1}
+  # Expiry job (FR-025): every minute, PENDING payments 5 minutes past their checkout.
+  expiry:
+    interval: 60000
+    batch-size: 50
 
 # Broker of the domain events (ADR-004, ADR-014): RabbitMQ of market-agri-infra, as transactions_app,
 # which may only publish to market-agri.events. Without these variables the service does not start.

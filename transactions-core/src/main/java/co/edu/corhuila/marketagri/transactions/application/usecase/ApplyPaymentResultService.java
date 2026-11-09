@@ -55,6 +55,23 @@ public final class ApplyPaymentResultService implements ApplyPaymentResult {
         });
     }
 
+    @Override
+    public Outcome expire(UUID transactionId, String correlationId) {
+        return unitOfWork.inTransaction(() -> {
+            Optional<Transaction> stored = settlements.lockById(transactionId);
+            if (stored.isEmpty()) {
+                return Outcome.UNKNOWN_TRANSACTION;
+            }
+            if (!stored.get().isPending()) {
+                return Outcome.ALREADY_SETTLED;
+            }
+            Transaction failed = stored.get().expire(clock.instant());
+            settlements.settle(failed, TransactionEvent.failed(eventIds.get(), failed, FailureReason.EXPIRED,
+                    correlationId, null));
+            return Outcome.FAILED;
+        });
+    }
+
     private Outcome settle(Transaction pending, Command command) {
         PaymentResult result = command.result();
         String causationId = result.gatewayTransactionId();
