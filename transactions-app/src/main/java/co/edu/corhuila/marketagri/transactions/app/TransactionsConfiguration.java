@@ -7,6 +7,7 @@ import co.edu.corhuila.marketagri.transactions.adapter.out.messaging.RabbitEvent
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcExpiredPayments;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcOutbox;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcLedger;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcPaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.OutboxEnvelopes;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
@@ -26,6 +27,7 @@ import co.edu.corhuila.marketagri.transactions.application.port.out.ExpiredPayme
 import co.edu.corhuila.marketagri.transactions.application.port.out.Outbox;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentGateway;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentLookup;
+import co.edu.corhuila.marketagri.transactions.application.port.out.Ledger;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
@@ -132,10 +134,19 @@ public class TransactionsConfiguration {
         return new JdbcPaymentSettlements(jdbc, new OutboxEnvelopes(json));
     }
 
-    /** E-43 and the expiry job: the state and its event in one transaction (ADR-014); random event ids. */
+    /** The producers' ledger (D-C14, AGGR-INV-006), as transactions_app. */
     @Bean
-    ApplyPaymentResult applyPaymentResult(PaymentSettlements settlements, UnitOfWork unitOfWork) {
-        return new ApplyPaymentResultService(settlements, unitOfWork, UUID::randomUUID, Clock.systemUTC());
+    JdbcLedger ledger(JdbcClient jdbc) {
+        return new JdbcLedger(jdbc);
+    }
+
+    /**
+     * E-43 and the expiry job: the state, its event and, when confirmed, the ledger entry in one
+     * transaction (ADR-014, AGGR-INV-006); random event ids.
+     */
+    @Bean
+    ApplyPaymentResult applyPaymentResult(PaymentSettlements settlements, Ledger ledger, UnitOfWork unitOfWork) {
+        return new ApplyPaymentResultService(settlements, ledger, unitOfWork, UUID::randomUUID, Clock.systemUTC());
     }
 
     /**
