@@ -26,12 +26,13 @@ class TransactionsPersistenceIT extends TransactionsIntegrationTest {
     @Autowired
     private JdbcTemplate jdbc;
 
+    /** The integration tests have a database and no broker, so readiness is 503 with the database UP. */
     @Test
-    void readyIs200WithTheDatabaseUp() throws Exception {
+    void readinessReportsTheDatabaseUp() throws Exception {
         http.perform(get("/health/ready"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.status").value("UP"))
-                .andExpect(jsonPath("$.checks.database").value("UP"));
+                .andExpect(status().isServiceUnavailable())
+                .andExpect(jsonPath("$.checks.database").value("UP"))
+                .andExpect(jsonPath("$.checks.broker").value("DOWN"));
     }
 
     @Test

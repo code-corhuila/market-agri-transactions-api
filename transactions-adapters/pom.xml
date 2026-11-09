@@ -12,7 +12,8 @@
     <artifactId>transactions-adapters</artifactId>
     <description>Inbound HTTP adapter and outbound adapters. They implement the ports of the core.</description>
 
-    <!-- The broker client arrives with the outbox relay (D4a). -->
+    <!-- The broker client is the plain RabbitMQ Java client (version managed by Spring Boot): no
+         Spring AMQP, so nothing can declare exchanges or queues (the topology belongs to infra). -->
     <dependencies>
         <dependency>
             <groupId>co.edu.corhuila.marketagri</groupId>
@@ -36,6 +37,11 @@
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>com.rabbitmq</groupId>
+            <artifactId>amqp-client</artifactId>
         </dependency>
 
         <dependency>

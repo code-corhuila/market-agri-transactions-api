@@ -17,12 +17,18 @@ services:
       WOMPI_PUBLIC_KEY: ${WOMPI_PUBLIC_KEY:-}
       WOMPI_INTEGRITY_SECRET: ${WOMPI_INTEGRITY_SECRET:-}
       WOMPI_EVENTS_SECRET: ${WOMPI_EVENTS_SECRET:-}
-    depends_on:                       # postgres lives in market-agri-infra; resolved when included
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      BROKER_USERNAME: transactions_app
+      BROKER_PASSWORD: ${TRANSACTIONS_BROKER_PASSWORD:?set TRANSACTIONS_BROKER_PASSWORD}
+    depends_on:                       # postgres and rabbitmq live in market-agri-infra; resolved when included
       postgres:
+        condition: service_healthy
+      rabbitmq:
         condition: service_healthy
     expose:
       - "8080"
-    healthcheck:                      # readiness: healthy only when the database answers (D-C20)
+    healthcheck:                      # readiness: healthy only when the database and the broker answer (D-C20)
       test: ["CMD", "wget", "-qO-", "http://localhost:8080/health/ready"]
       interval: 10s
       timeout: 3s

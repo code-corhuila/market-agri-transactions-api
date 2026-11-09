@@ -3,7 +3,9 @@ package co.edu.corhuila.marketagri.transactions.app;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.PublicKeys;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.WompiEventReader;
+import co.edu.corhuila.marketagri.transactions.adapter.out.messaging.RabbitEventPublisher;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcOutbox;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcPaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.OutboxEnvelopes;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
@@ -14,7 +16,9 @@ import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiPaymentG
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.SpringUnitOfWork;
 import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult;
 import co.edu.corhuila.marketagri.transactions.application.port.in.CreatePayment;
+import co.edu.corhuila.marketagri.transactions.application.port.in.PublishPendingEvents;
 import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransactions;
+import co.edu.corhuila.marketagri.transactions.application.port.out.Outbox;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentGateway;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
@@ -23,11 +27,13 @@ import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionR
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import co.edu.corhuila.marketagri.transactions.application.usecase.ApplyPaymentResultService;
 import co.edu.corhuila.marketagri.transactions.application.usecase.CreatePaymentService;
+import co.edu.corhuila.marketagri.transactions.application.usecase.PublishPendingEventsService;
 import co.edu.corhuila.marketagri.transactions.application.usecase.ReadTransactionsService;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPublicKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.time.Duration;
 import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
@@ -63,7 +69,7 @@ public class TransactionsConfiguration {
         return new Rs256Verifier(key, issuer, Clock.systemUTC());
     }
 
-    /** E-61: transactions answers only with its database up ({@code broker} joins with the relay, D4a). */
+    /** E-61: transactions answers only with its database up; {@code broker} is the relay's publisher. */
     @Bean
     ReadinessCheck databaseCheck(DataSource dataSource) {
         return new JdbcDatabaseCheck(dataSource);
@@ -123,6 +129,29 @@ public class TransactionsConfiguration {
     @Bean
     ApplyPaymentResult applyPaymentResult(PaymentSettlements settlements, UnitOfWork unitOfWork) {
         return new ApplyPaymentResultService(settlements, unitOfWork, UUID::randomUUID, Clock.systemUTC());
+    }
+
+    /**
+     * The outbox relay's broker (ADR-014): RabbitMQ of market-agri-infra as transactions_app, which
+     * may only publish to market-agri.events. Also the {@code broker} check of E-61.
+     */
+    @Bean
+    RabbitEventPublisher eventPublisher(@Value("${broker.host}") String host, @Value("${broker.port}") int port,
+                                        @Value("${broker.username}") String username,
+                                        @Value("${broker.password}") String password,
+                                        @Value("${broker.timeout}") Duration timeout) {
+        return new RabbitEventPublisher(host, port, username, password, timeout);
+    }
+
+    @Bean
+    Outbox outbox(JdbcClient jdbc) {
+        return new JdbcOutbox(jdbc);
+    }
+
+    @Bean
+    PublishPendingEvents publishPendingEvents(Outbox outbox, RabbitEventPublisher publisher,
+                                              @Value("${outbox.relay.batch-size}") int batchSize) {
+        return new PublishPendingEventsService(outbox, publisher, Clock.systemUTC(), batchSize);
     }
 
     /** Spring Boot's transaction manager of the DataSource: the same connection JdbcClient uses. */
