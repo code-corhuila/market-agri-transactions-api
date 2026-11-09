@@ -84,4 +84,15 @@ class TransactionSettlementTest {
         assertThatThrownBy(() -> failed.confirm(result(PaymentOutcome.APPROVED, AMOUNT, "COP"), LATER))
                 .isInstanceOf(IllegalStateException.class);
     }
+
+    @Test
+    void anExpiredCheckoutFailsWithoutAProviderPayment() {
+        Transaction expired = pending().expire(LATER);
+
+        assertThat(expired.status()).isEqualTo(TransactionStatus.FAILED);
+        assertThat(expired.failedAt()).isEqualTo(LATER_IN_SECONDS);
+        assertThat(expired.gatewayTransactionId()).isNull();
+        assertThat(expired.paymentMethod()).isNull();
+        assertThatThrownBy(() -> expired.expire(LATER)).isInstanceOf(IllegalStateException.class);
+    }
 }
