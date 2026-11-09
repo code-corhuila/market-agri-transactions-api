@@ -2,11 +2,13 @@ package co.edu.corhuila.marketagri.transactions.app;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * Composition root. Scans the app and the adapters; the core carries no Spring annotation,
  * so its types are instantiated explicitly in {@link TransactionsConfiguration}.
  */
+@EnableScheduling
 @SpringBootApplication(scanBasePackages = {
         "co.edu.corhuila.marketagri.transactions.app",
         "co.edu.corhuila.marketagri.transactions.adapter"})
