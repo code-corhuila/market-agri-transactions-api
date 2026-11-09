@@ -5,21 +5,27 @@ import co.edu.corhuila.marketagri.transactions.adapter.in.http.Rs256Verifier;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.WompiEventReader;
 import co.edu.corhuila.marketagri.transactions.adapter.out.messaging.RabbitEventPublisher;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcExpiredPayments;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcOutbox;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcPaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.OutboxEnvelopes;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionRepository;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.FakePaymentGateway;
+import co.edu.corhuila.marketagri.transactions.adapter.out.payment.FakePaymentLookup;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.RedirectUrls;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiPaymentGateway;
+import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiPaymentLookup;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.SpringUnitOfWork;
 import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult;
 import co.edu.corhuila.marketagri.transactions.application.port.in.CreatePayment;
 import co.edu.corhuila.marketagri.transactions.application.port.in.PublishPendingEvents;
 import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransactions;
+import co.edu.corhuila.marketagri.transactions.application.port.in.SettleExpiredPayments;
+import co.edu.corhuila.marketagri.transactions.application.port.out.ExpiredPayments;
 import co.edu.corhuila.marketagri.transactions.application.port.out.Outbox;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentGateway;
+import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentLookup;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
@@ -29,6 +35,7 @@ import co.edu.corhuila.marketagri.transactions.application.usecase.ApplyPaymentR
 import co.edu.corhuila.marketagri.transactions.application.usecase.CreatePaymentService;
 import co.edu.corhuila.marketagri.transactions.application.usecase.PublishPendingEventsService;
 import co.edu.corhuila.marketagri.transactions.application.usecase.ReadTransactionsService;
+import co.edu.corhuila.marketagri.transactions.application.usecase.SettleExpiredPaymentsService;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPublicKey;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -152,6 +159,26 @@ public class TransactionsConfiguration {
     PublishPendingEvents publishPendingEvents(Outbox outbox, RabbitEventPublisher publisher,
                                               @Value("${outbox.relay.batch-size}") int batchSize) {
         return new PublishPendingEventsService(outbox, publisher, Clock.systemUTC(), batchSize);
+    }
+
+    /** The expiry job asks the same provider as {@code PAYMENT_GATEWAY}; the fake one never has a payment. */
+    @Bean
+    PaymentLookup paymentLookup(@Value("${payment.gateway:}") String gateway,
+                                @Value("${payment.wompi.api-url}") String apiUrl,
+                                @Value("${payment.wompi.private-key:}") String privateKey) {
+        return "wompi".equals(gateway) ? new WompiPaymentLookup(apiUrl, privateKey, Duration.ofSeconds(5))
+                : new FakePaymentLookup();
+    }
+
+    @Bean
+    ExpiredPayments expiredPayments(JdbcClient jdbc) {
+        return new JdbcExpiredPayments(jdbc);
+    }
+
+    @Bean
+    SettleExpiredPayments settleExpiredPayments(ExpiredPayments expired, PaymentLookup lookup, ApplyPaymentResult apply,
+                                                @Value("${payment.expiry.batch-size}") int batchSize) {
+        return new SettleExpiredPaymentsService(expired, lookup, apply, Clock.systemUTC(), batchSize);
     }
 
     /** Spring Boot's transaction manager of the DataSource: the same connection JdbcClient uses. */

@@ -89,6 +89,15 @@ public record Transaction(UUID id, PurchaseSnapshot purchase, Money amount, Tran
                 result.gatewayTransactionId(), createdAt, expiresAt, null, now.truncatedTo(ChronoUnit.SECONDS));
     }
 
+    /** The checkout ended and the provider has no final result (expiry job, FR-025): FAILED, no provider payment. */
+    public Transaction expire(Instant now) {
+        if (!isPending()) {
+            throw new IllegalStateException(status + " is terminal (AGGR-INV-005): " + id);
+        }
+        return new Transaction(id, purchase, amount, TransactionStatus.FAILED, null, null, createdAt, expiresAt,
+                null, now.truncatedTo(ChronoUnit.SECONDS));
+    }
+
     private void requireSettleable(PaymentResult result, PaymentOutcome expected) {
         if (!isPending()) {
             throw new IllegalStateException(status + " is terminal (AGGR-INV-005): " + id);

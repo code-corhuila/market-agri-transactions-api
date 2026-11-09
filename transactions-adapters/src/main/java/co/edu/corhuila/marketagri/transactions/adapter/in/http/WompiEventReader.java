@@ -1,18 +1,14 @@
 package co.edu.corhuila.marketagri.transactions.adapter.in.http;
 
 import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult.Command;
-import co.edu.corhuila.marketagri.transactions.domain.model.PaymentMethod;
-import co.edu.corhuila.marketagri.transactions.domain.model.PaymentOutcome;
-import co.edu.corhuila.marketagri.transactions.domain.model.PaymentResult;
+import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiResults;
 import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.Locale;
 import java.util.Optional;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -24,9 +20,6 @@ import java.util.UUID;
 public final class WompiEventReader {
 
     static final String TRANSACTION_UPDATED = "transaction.updated";
-    private static final Set<String> REJECTED = Set.of("DECLINED", "VOIDED", "ERROR");
-    private static final Set<String> CONTRACT_METHODS =
-            Set.of(Arrays.stream(PaymentMethod.values()).map(Enum::name).toArray(String[]::new));
 
     private final String eventsSecret;
 
@@ -75,25 +68,7 @@ public final class WompiEventReader {
         } catch (IllegalArgumentException notOurs) {
             return Optional.empty();
         }
-        PaymentResult result = new PaymentResult(transaction.path("id").asText(), outcome(transaction.path("status").asText()),
-                transaction.path("amount_in_cents").asLong(), transaction.path("currency").asText(),
-                method(transaction.path("payment_method_type").asText(null)));
-        return Optional.of(new Command(reference, result, correlationId));
-    }
-
-    private static PaymentOutcome outcome(String status) {
-        if ("APPROVED".equals(status)) {
-            return PaymentOutcome.APPROVED;
-        }
-        return REJECTED.contains(status) ? PaymentOutcome.REJECTED : PaymentOutcome.PENDING;
-    }
-
-    /** {@code OTHER} for a method outside the contract's enum (E-43). */
-    private static PaymentMethod method(String type) {
-        if (type == null || type.isBlank()) {
-            return null;
-        }
-        return CONTRACT_METHODS.contains(type) ? PaymentMethod.valueOf(type) : PaymentMethod.OTHER;
+        return Optional.of(new Command(reference, WompiResults.of(transaction), correlationId));
     }
 
     private static String sha256(String chain) {

@@ -11,6 +11,9 @@ public interface ApplyPaymentResult {
 
     Outcome apply(Command command);
 
+    /** The expiry job, with no final result of the provider: PENDING → FAILED ({@code EXPIRED}); else nothing. */
+    Outcome expire(UUID transactionId, String correlationId);
+
     /** {@code transactionId} is the provider's {@code reference}; {@code correlationId} goes into the event. */
     record Command(UUID transactionId, PaymentResult result, String correlationId) {
     }
@@ -18,7 +21,7 @@ public interface ApplyPaymentResult {
     enum Outcome {
         /** PENDING → CONFIRMED, with {@code TransactionConfirmed} in the outbox. */
         CONFIRMED,
-        /** PENDING → FAILED, with {@code TransactionFailed} ({@code PAYMENT_FAILED}) in the outbox. */
+        /** PENDING → FAILED, with {@code TransactionFailed} ({@code PAYMENT_FAILED}, or {@code EXPIRED}) in the outbox. */
         FAILED,
         /** The provider has no final result yet: nothing changes. */
         STILL_PENDING,
