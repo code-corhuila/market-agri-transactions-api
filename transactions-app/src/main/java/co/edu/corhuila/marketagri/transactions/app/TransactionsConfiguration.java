@@ -2,25 +2,33 @@ package co.edu.corhuila.marketagri.transactions.app;
 
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.PublicKeys;
 import co.edu.corhuila.marketagri.transactions.adapter.in.http.Rs256Verifier;
+import co.edu.corhuila.marketagri.transactions.adapter.in.http.WompiEventReader;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcDatabaseCheck;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcPaymentSettlements;
+import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.OutboxEnvelopes;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionCreations;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.JdbcTransactionRepository;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.FakePaymentGateway;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.RedirectUrls;
 import co.edu.corhuila.marketagri.transactions.adapter.out.payment.WompiPaymentGateway;
 import co.edu.corhuila.marketagri.transactions.adapter.out.persistence.SpringUnitOfWork;
+import co.edu.corhuila.marketagri.transactions.application.port.in.ApplyPaymentResult;
 import co.edu.corhuila.marketagri.transactions.application.port.in.CreatePayment;
 import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransactions;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentGateway;
+import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.ReadinessCheck;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
+import co.edu.corhuila.marketagri.transactions.application.usecase.ApplyPaymentResultService;
 import co.edu.corhuila.marketagri.transactions.application.usecase.CreatePaymentService;
 import co.edu.corhuila.marketagri.transactions.application.usecase.ReadTransactionsService;
 import java.nio.file.Path;
 import java.security.interfaces.RSAPublicKey;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
@@ -98,6 +106,23 @@ public class TransactionsConfiguration {
     @Bean
     ReadTransactions readTransactions(TransactionRepository transactions) {
         return new ReadTransactionsService(transactions);
+    }
+
+    /** E-43: Wompi's events, authenticated with WOMPI_EVENTS_SECRET (ADR-019); without it every event is refused. */
+    @Bean
+    WompiEventReader wompiEventReader(@Value("${payment.wompi.events-secret:}") String eventsSecret) {
+        return new WompiEventReader(eventsSecret);
+    }
+
+    @Bean
+    PaymentSettlements paymentSettlements(JdbcClient jdbc, ObjectMapper json) {
+        return new JdbcPaymentSettlements(jdbc, new OutboxEnvelopes(json));
+    }
+
+    /** E-43 and the expiry job: the state and its event in one transaction (ADR-014); random event ids. */
+    @Bean
+    ApplyPaymentResult applyPaymentResult(PaymentSettlements settlements, UnitOfWork unitOfWork) {
+        return new ApplyPaymentResultService(settlements, unitOfWork, UUID::randomUUID, Clock.systemUTC());
     }
 
     /** Spring Boot's transaction manager of the DataSource: the same connection JdbcClient uses. */

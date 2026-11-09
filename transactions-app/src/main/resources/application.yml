@@ -47,6 +47,7 @@ payment:
   wompi:
     public-key: ${WOMPI_PUBLIC_KEY:}
     integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
+    events-secret: ${WOMPI_EVENTS_SECRET:}       # checksum of the events of E-43
 
 # One JSON object per log line; the MDC (correlationId) goes into every line (Anexo C 5.3.9).
 logging:

@@ -1,14 +1,17 @@
 package co.edu.corhuila.marketagri.transactions.app;
 
+import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
+import co.edu.corhuila.marketagri.transactions.domain.model.TransactionEvent;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionInProgressException;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionStatus;
+import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -21,19 +24,29 @@ import java.util.function.Supplier;
 /**
  * The persistence ports in memory for the HTTP tests, with the rules of the real tables: the id
  * first (ON CONFLICT), then the partial index of D-21, a rollback when the work throws, and the
- * order of E-42 ({@code createdAt} descending, then {@code id}).
+ * order of E-42 ({@code createdAt} descending, then {@code id}), and the outbox of E-43.
  */
-final class InMemoryTransactions implements TransactionCreations, TransactionRepository, UnitOfWork {
+final class InMemoryTransactions implements TransactionCreations, TransactionRepository, PaymentSettlements, UnitOfWork {
 
     private static final Comparator<Transaction> E42_ORDER =
             Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id);
 
     private final Map<UUID, Transaction> transactions = new LinkedHashMap<>();
     private final Map<String, UUID> keys = new HashMap<>();
+    private final List<TransactionEvent> outbox = new ArrayList<>();
 
     synchronized void clear() {
         transactions.clear();
         keys.clear();
+        outbox.clear();
+    }
+
+    synchronized void put(Transaction transaction) {
+        transactions.put(transaction.id(), transaction);
+    }
+
+    synchronized List<TransactionEvent> outbox() {
+        return List.copyOf(outbox);
     }
 
     synchronized int size() {
@@ -90,5 +103,22 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
         List<Transaction> matching = transactions.values().stream().filter(filter::matches).sorted(E42_ORDER).toList();
         return new Page<>(matching.stream().skip(request.offset()).limit(request.limit()).toList(), request,
                 matching.size());
+    }
+
+    @Override
+    public synchronized Optional<Transaction> lockById(UUID id) {
+        return findById(id);
+    }
+
+    @Override
+    public synchronized boolean gatewayTransactionIdTakenByAnother(String gatewayTransactionId, UUID transactionId) {
+        return transactions.values().stream().anyMatch(stored -> !stored.id().equals(transactionId)
+                && gatewayTransactionId.equals(stored.gatewayTransactionId()));
+    }
+
+    @Override
+    public synchronized void settle(Transaction settled, TransactionEvent event) {
+        transactions.put(settled.id(), settled);
+        outbox.add(event);
     }
 }
