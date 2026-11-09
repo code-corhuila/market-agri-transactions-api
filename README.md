@@ -29,6 +29,7 @@ its migrations live in `market-agri-transactions-db` (ADR-011); this service con
 | E-41 `GET /api/v1/transactions/{id}` (participant only) and E-42 `GET /api/v1/transactions/mine` (purchases or sales, `status`, `page`, `limit`) | `adapter/in/http/TransactionController`, `JdbcTransactionRepository` |
 | E-43 `POST /api/v1/transactions/webhooks/payment-gateway` (anonymous): Wompi's checksum, `CONFIRMED`/`FAILED` and the event in the outbox in one transaction; `200` for every signed event (ADR-019, ADR-014) | `adapter/in/http/PaymentWebhookController`, `WompiEventReader`, `JdbcPaymentSettlements` |
 | Outbox relay: every second, oldest first, to `market-agri.events` with publisher confirms as `transactions_app`; `published_at` only after the confirm; nothing declared (ADR-014) | `OutboxRelay`, `PublishPendingEventsService`, `adapter/out/messaging/RabbitEventPublisher` |
+| Expiry job: every minute, a `PENDING` payment 5 minutes past its checkout is checked with Wompi by reference (private key); a final result is applied as E-43 would, otherwise `FAILED` + `TransactionFailed` (`EXPIRED`); no answer keeps it `PENDING` (FR-025) | `ExpiryJob`, `SettleExpiredPaymentsService`, `adapter/out/payment/WompiPaymentLookup` |
 | Checkout link of Wompi Web Checkout signed with SHA-256, or the fake one, by `PAYMENT_GATEWAY` (ADR-019) | `adapter/out/payment/WompiPaymentGateway`, `FakePaymentGateway` |
 | Payment and `Idempotency-Key` in one transaction; the partial index → `TRANSACTION_IN_PROGRESS` (I-06, D-21) | `adapter/out/persistence/JdbcTransactionCreations` |
 
