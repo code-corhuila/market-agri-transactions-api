@@ -176,4 +176,39 @@ class TransactionsReadTest extends TransactionsSpringTest {
         read(PATH + "/mine?buyerId=" + ANA, carlos).andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.details[0].field").value("buyerId"));
     }
+
+    @Test
+    void anAdminListsAndReadsTransactionsWithTheConfirmedLedger() throws Exception {
+        Transaction pending = stored(CARLOS, ANA, "2026-11-04T15:00:00Z");
+        Transaction confirmed = confirmed(UUID.randomUUID(), ANA, "2026-11-04T16:00:00Z");
+        String admin = as("ADMIN", UUID.randomUUID());
+
+        read(PATH + "/admin/transactions?producerId=" + ANA + "&status=CONFIRMED", admin)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.length()").value(1))
+                .andExpect(jsonPath("$.data[0].id").value(confirmed.id().toString()))
+                .andExpect(jsonPath("$.data[0].ledger.grossAmountCents").value(8_500_000))
+                .andExpect(jsonPath("$.meta.total").value(1));
+        read(PATH + "/admin/transactions/" + pending.id(), admin)
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(pending.id().toString()))
+                .andExpect(jsonPath("$.ledger").value(nullValue()));
+    }
+
+    @Test
+    void onlyAnAdminCanUseTheAdminQueriesAndInvalidInputIs400() throws Exception {
+        String buyer = as("BUYER", CARLOS);
+        String admin = as("ADMIN", UUID.randomUUID());
+
+        read(PATH + "/admin/transactions", buyer).andExpect(status().isForbidden());
+        read(PATH + "/admin/transactions/not-a-uuid", admin).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.error").value("VALIDATION_ERROR"))
+                .andExpect(jsonPath("$.details[0].field").value("id"));
+        read(PATH + "/admin/transactions?producerId=not-a-uuid", admin).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details[0].field").value("producerId"));
+        read(PATH + "/admin/transactions?unexpected=value", admin).andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.details[0].field").value("unexpected"));
+        read(PATH + "/admin/transactions/" + UUID.randomUUID(), admin).andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("TRANSACTION_NOT_FOUND"));
+    }
 }
