@@ -6,6 +6,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import co.edu.corhuila.marketagri.transactions.domain.model.Money;
+import co.edu.corhuila.marketagri.transactions.domain.model.PaymentMethod;
+import co.edu.corhuila.marketagri.transactions.domain.model.PaymentOutcome;
+import co.edu.corhuila.marketagri.transactions.domain.model.PaymentResult;
 import co.edu.corhuila.marketagri.transactions.domain.model.ProductUnit;
 import co.edu.corhuila.marketagri.transactions.domain.model.PurchaseSnapshot;
 import co.edu.corhuila.marketagri.transactions.domain.model.Quantity;
@@ -50,6 +53,15 @@ class TransactionsReadTest extends TransactionsSpringTest {
         return transaction;
     }
 
+    private Transaction confirmed(UUID buyer, UUID producer, String createdAt) {
+        Transaction pending = stored(buyer, producer, createdAt);
+        Transaction confirmed = pending.confirm(new PaymentResult("wompi-" + pending.id(), PaymentOutcome.APPROVED,
+                pending.amount().cents(), "COP", PaymentMethod.CARD), Instant.parse(createdAt).plusSeconds(30));
+        store.put(confirmed);
+        store.add(confirmed.ledgerEntry());
+        return confirmed;
+    }
+
     private static String as(String role, UUID user) {
         return "Bearer " + TestTokens.user(role).claim("sub", user.toString()).signed();
     }
@@ -73,6 +85,23 @@ class TransactionsReadTest extends TransactionsSpringTest {
                 .andExpect(jsonPath("$.paymentMethod").value(nullValue()))
                 .andExpect(jsonPath("$.ledger").value(nullValue()));
         read(PATH + "/" + transaction.id(), as("PRODUCER", ANA)).andExpect(status().isOk());
+    }
+
+    @Test
+    void onlyTheProducerSeesTheLedgerOfAConfirmedPayment() throws Exception {
+        Transaction transaction = confirmed(CARLOS, ANA, "2026-11-04T15:00:00Z");
+
+        read(PATH + "/" + transaction.id(), as("PRODUCER", ANA))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ledger.grossAmountCents").value(8_500_000))
+                .andExpect(jsonPath("$.ledger.platformFeeCents").value(0))
+                .andExpect(jsonPath("$.ledger.netAmountCents").value(8_500_000))
+                .andExpect(jsonPath("$.ledger.currency").value("COP"))
+                .andExpect(jsonPath("$.ledger.status").value("PENDING_DISBURSEMENT"))
+                .andExpect(jsonPath("$.ledger.createdAt").value("2026-11-04T15:00:30Z"));
+        read(PATH + "/" + transaction.id(), as("BUYER", CARLOS))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ledger").value(nullValue()));
     }
 
     @Test
