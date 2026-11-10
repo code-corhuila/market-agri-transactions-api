@@ -3,6 +3,7 @@ package co.edu.corhuila.marketagri.transactions.adapter.out.persistence;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
+import co.edu.corhuila.marketagri.transactions.domain.model.AdminTransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionFilter;
 import java.util.HashMap;
@@ -48,6 +49,36 @@ public final class JdbcTransactionRepository implements TransactionRepository {
         if (filter.status() != null) {
             where.append(" AND status = :status");
             params.put("status", filter.status().name());
+        }
+        List<Transaction> items = jdbc.sql("SELECT * FROM transactions.payment_transaction WHERE " + where
+                        + " ORDER BY created_at DESC, id ASC LIMIT :limit OFFSET :offset")
+                .params(params)
+                .param("limit", request.limit())
+                .param("offset", request.offset())
+                .query(JdbcTransactionCreations::transaction)
+                .list();
+        long total = jdbc.sql("SELECT count(*) FROM transactions.payment_transaction WHERE " + where)
+                .params(params)
+                .query(Long.class)
+                .single();
+        return new Page<>(items, request, total);
+    }
+
+    @Override
+    public Page<Transaction> findPage(AdminTransactionFilter filter, PageRequest request) {
+        StringBuilder where = new StringBuilder("1 = 1");
+        Map<String, Object> params = new HashMap<>();
+        if (filter.status() != null) {
+            where.append(" AND status = :status");
+            params.put("status", filter.status().name());
+        }
+        if (filter.producerId() != null) {
+            where.append(" AND producer_id = :producerId");
+            params.put("producerId", filter.producerId());
+        }
+        if (filter.buyerId() != null) {
+            where.append(" AND buyer_id = :buyerId");
+            params.put("buyerId", filter.buyerId());
         }
         List<Transaction> items = jdbc.sql("SELECT * FROM transactions.payment_transaction WHERE " + where
                         + " ORDER BY created_at DESC, id ASC LIMIT :limit OFFSET :offset")

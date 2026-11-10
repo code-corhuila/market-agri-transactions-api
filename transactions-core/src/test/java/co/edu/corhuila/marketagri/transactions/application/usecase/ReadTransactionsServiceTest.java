@@ -47,6 +47,15 @@ class ReadTransactionsServiceTest {
             List<Transaction> page = matching.stream().skip(request.offset()).limit(request.limit()).toList();
             return new Page<>(page, request, matching.size());
         }
+
+        @Override
+        public Page<Transaction> findPage(AdminTransactionFilter filter, PageRequest request) {
+            List<Transaction> matching = stored.stream().filter(filter::matches)
+                    .sorted(Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id))
+                    .toList();
+            List<Transaction> page = matching.stream().skip(request.offset()).limit(request.limit()).toList();
+            return new Page<>(page, request, matching.size());
+        }
     }
 
     private final InMemory repository = new InMemory();
