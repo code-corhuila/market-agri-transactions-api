@@ -2,6 +2,7 @@ package co.edu.corhuila.marketagri.transactions.adapter.in.http;
 
 import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransactions;
 import co.edu.corhuila.marketagri.transactions.application.port.out.LedgerEntries;
+import co.edu.corhuila.marketagri.transactions.domain.model.AdminTransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Participant;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
@@ -24,6 +25,7 @@ import org.springframework.web.bind.annotation.RestController;
 public class TransactionController {
 
     private static final Set<String> MINE_PARAMETERS = Set.of("status", "page", "limit");
+    private static final Set<String> ADMIN_PARAMETERS = Set.of("status", "producerId", "buyerId", "page", "limit");
     private static final String BUYER = "BUYER";
 
     private final ReadTransactions read;
@@ -51,6 +53,27 @@ public class TransactionController {
                 "PRODUCER".equals(caller.role()) ? ledgerEntries.findByTransactionIds(page.items().stream()
                         .map(Transaction::id).collect(Collectors.toSet())) : Map.of();
         return PageView.of(page, transaction -> viewOf(transaction, caller, ledgerByTransaction));
+    }
+
+    /** E-44: an ADMIN may combine all optional filters and reads the ledger of confirmed payments. */
+    @RequiredRole({"ADMIN"})
+    @GetMapping("/admin/transactions")
+    public PageView<TransactionView> admin(@RequestParam Map<String, String> query) {
+        QueryParameters.allowOnly(query, ADMIN_PARAMETERS);
+        AdminTransactionFilter filter = new AdminTransactionFilter(QueryParameters.code(query, "status", TransactionStatus.class),
+                QueryParameters.uuid(query, "producerId"), QueryParameters.uuid(query, "buyerId"));
+        var page = read.admin(filter, QueryParameters.pageRequest(query));
+        Map<UUID, co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry> ledgerByTransaction =
+                ledgerEntries.findByTransactionIds(page.items().stream().map(Transaction::id).collect(Collectors.toSet()));
+        return PageView.of(page, transaction -> TransactionView.of(transaction, ledgerByTransaction.get(transaction.id())));
+    }
+
+    /** E-45: authorization is already enforced at this adapter boundary. */
+    @RequiredRole({"ADMIN"})
+    @GetMapping("/admin/transactions/{id}")
+    public TransactionView adminGet(@PathVariable UUID id) {
+        Transaction transaction = read.adminGet(id);
+        return TransactionView.of(transaction, ledgerEntries.findByTransactionIds(Set.of(transaction.id())).get(transaction.id()));
     }
 
     /** E-41: only a participant; an unknown id is {@code 404}, a malformed one {@code 400} (D-C23). */
@@ -99,6 +122,18 @@ public class TransactionController {
                 return Enum.valueOf(type, raw);
             } catch (IllegalArgumentException unknown) {
                 throw new InvalidParameterException(name, "Valor no permitido.");
+            }
+        }
+
+        static UUID uuid(Map<String, String> query, String name) {
+            String raw = query.get(name);
+            if (raw == null) {
+                return null;
+            }
+            try {
+                return UUID.fromString(raw);
+            } catch (IllegalArgumentException invalid) {
+                throw new InvalidParameterException(name, "Debe ser un UUID válido.");
             }
         }
 
