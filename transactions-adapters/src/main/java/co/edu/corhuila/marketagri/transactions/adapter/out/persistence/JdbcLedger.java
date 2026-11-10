@@ -33,4 +33,5 @@ public final class JdbcLedger implements Ledger {
                 .param("createdAt", entry.createdAt().atOffset(ZoneOffset.UTC))
                 .update();
     }
+
 }
