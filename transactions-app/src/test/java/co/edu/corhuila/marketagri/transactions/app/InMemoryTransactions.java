@@ -1,6 +1,7 @@
 package co.edu.corhuila.marketagri.transactions.app;
 
 import co.edu.corhuila.marketagri.transactions.application.port.out.Ledger;
+import co.edu.corhuila.marketagri.transactions.application.port.out.LedgerEntries;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
@@ -29,7 +30,7 @@ import java.util.function.Supplier;
  * order of E-42 ({@code createdAt} descending, then {@code id}), and the outbox of E-43.
  */
 final class InMemoryTransactions implements TransactionCreations, TransactionRepository, PaymentSettlements, Ledger,
-        UnitOfWork {
+        LedgerEntries, UnitOfWork {
 
     private static final Comparator<Transaction> E42_ORDER =
             Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id);
@@ -133,6 +134,12 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
     @Override
     public synchronized void add(LedgerEntry entry) {
         ledger.add(entry);
+    }
+
+    @Override
+    public synchronized Map<UUID, LedgerEntry> findByTransactionIds(java.util.Collection<UUID> transactionIds) {
+        return ledger.stream().filter(entry -> transactionIds.contains(entry.transactionId()))
+                .collect(java.util.stream.Collectors.toMap(LedgerEntry::transactionId, entry -> entry));
     }
 
     synchronized List<LedgerEntry> ledger() {
