@@ -32,7 +32,8 @@ class TransactionsReadinessTest extends TransactionsSpringTest {
         http.perform(get("/health/ready"))
                 .andExpect(status().isServiceUnavailable())
                 .andExpect(jsonPath("$.status").value("DOWN"))
-                .andExpect(jsonPath("$.checks.database").value("DOWN"));
+                .andExpect(jsonPath("$.checks.database").value("DOWN"))
+                .andExpect(jsonPath("$.checks.broker").value("DOWN"));
         http.perform(get("/health"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("UP"));
