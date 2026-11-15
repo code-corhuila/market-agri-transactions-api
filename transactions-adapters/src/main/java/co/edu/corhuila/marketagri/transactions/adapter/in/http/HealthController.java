@@ -7,8 +7,9 @@ import org.springframework.web.bind.annotation.RestController;
 /**
  * Liveness (api-contract E-60): checks nothing but the process, so a database outage never
  * makes the platform restart a healthy container. Readiness, with the database and the broker,
- * is {@code GET /health/ready} (E-61) and arrives with persistence (D3).
+ * is {@code GET /health/ready} (E-61) and arrives with persistence (D3). Anonymous (E-60).
  */
+@PublicEndpoint
 @RestController
 public class HealthController {
 
