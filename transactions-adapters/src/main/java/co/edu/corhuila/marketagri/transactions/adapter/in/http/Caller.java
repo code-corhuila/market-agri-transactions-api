@@ -1,5 +1,6 @@
 package co.edu.corhuila.marketagri.transactions.adapter.in.http;
 
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 
 /**
@@ -15,6 +16,15 @@ public record Caller(String subject, String role, String name) {
 
     public boolean isService() {
         return SERVICE_ROLE.equals(role);
+    }
+
+    /**
+     * The owner of an {@code Idempotency-Key} as the {@code uuid} column of B2 keeps it. A service
+     * {@code sub} is {@code service:<name>} (ADR-020), not a UUID, so it becomes the name-based UUID
+     * of the subject: always the same one for the same caller.
+     */
+    public UUID ownerId() {
+        return UUID.nameUUIDFromBytes(subject.getBytes(StandardCharsets.UTF_8));
     }
 
     /** A user token has a UUID {@code sub} and a {@code name} (authentication.md §2); otherwise it is not valid. */

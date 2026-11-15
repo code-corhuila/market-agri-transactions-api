@@ -22,3 +22,27 @@ jobs:
           cache: maven
       - name: Build and test all modules
         run: mvn -B -ntp verify
+
+  # Only on promotion to qa (git-conventions §6): PostgreSQL with the schema of transactions-db.
+  integration:
+    if: github.base_ref == 'qa'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check out transactions-db on the same target branch
+        uses: actions/checkout@v4
+        with:
+          repository: code-corhuila/market-agri-transactions-db
+          ref: ${{ github.base_ref }}
+          path: market-agri-transactions-db
+      - name: Set up Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Test database with the transactions schema
+        run: TRANSACTIONS_DB_DIR=market-agri-transactions-db bash scripts/test-database.sh >> "$GITHUB_ENV"
+      - name: Unit, HTTP and integration tests
+        run: mvn -B -ntp verify -Pintegration
