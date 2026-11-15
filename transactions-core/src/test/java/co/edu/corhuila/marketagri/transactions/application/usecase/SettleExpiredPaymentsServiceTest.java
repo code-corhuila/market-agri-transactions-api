@@ -91,7 +91,7 @@ class SettleExpiredPaymentsServiceTest {
 
     private final Store store = new Store();
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-    private final ApplyPaymentResult apply = new ApplyPaymentResultService(store, store, UUID::randomUUID, clock);
+    private final ApplyPaymentResult apply = new ApplyPaymentResultService(store, entry -> { }, store, UUID::randomUUID, clock);
     private final SettleExpiredPaymentsService job =
             new SettleExpiredPaymentsService(store, store, apply, clock, 100);
 

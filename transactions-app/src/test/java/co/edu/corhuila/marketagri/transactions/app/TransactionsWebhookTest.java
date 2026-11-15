@@ -101,6 +101,7 @@ class TransactionsWebhookTest extends TransactionsSpringTest {
         Transaction confirmed = store.findById(id).orElseThrow();
         assertThat(confirmed.status()).isEqualTo(TransactionStatus.CONFIRMED);
         assertThat(confirmed.paymentMethod()).isEqualTo(PaymentMethod.CARD);
+        assertThat(store.ledger()).singleElement().isEqualTo(confirmed.ledgerEntry());
         assertThat(store.outbox()).singleElement().satisfies(event -> {
             assertThat(event.type()).isEqualTo(TransactionEvent.Type.TRANSACTION_CONFIRMED);
             assertThat(event.correlationId()).isEqualTo("wompi-1");
