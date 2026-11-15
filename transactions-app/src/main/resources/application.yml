@@ -7,7 +7,23 @@ spring:
   web:
     resources:
       add-mappings: false               # an API serves no static files
-  # The pool (10 connections, 5 s wait, 5 s per statement) is declared here with persistence (D3).
+  # PostgreSQL of market-agri-infra, always as transactions_app. Without these variables the service
+  # does not start. The schema comes from market-agri-transactions-db: nothing here migrates (ADR-011).
+  datasource:
+    url: ${DATABASE_URL}
+    username: ${DATABASE_USER}
+    password: ${DATABASE_PASSWORD}
+    hikari:
+      maximum-pool-size: 10                         # connections
+      connection-timeout: 5000                      # ms waiting for a free connection
+      connection-init-sql: SET statement_timeout = '5s'   # per statement, on every connection
+  sql:
+    init:
+      mode: never                       # no schema.sql or data.sql, ever (norm 5.2.1)
+  # unitPriceCents is an integer (ADR-029): 12.5 is 400, not silently 12 (Jackson's default accepts it).
+  jackson:
+    deserialization:
+      accept-float-as-int: false
 
 server:
   port: ${PORT:8080}
@@ -22,6 +38,15 @@ jwt:
   issuer: ${JWT_ISSUER}
   public-key: ${JWT_PUBLIC_KEY:}
   public-key-file: ${JWT_PUBLIC_KEY_FILE:}
+
+# Payment provider (ADR-019): wompi (Web Checkout) or fake (CI, integration, E2E). The Wompi keys
+# live only in market-agri-infra/env/<env>.env; the buyer comes back to PUBLIC_BASE_URL/transacciones/<id>.
+payment:
+  gateway: ${PAYMENT_GATEWAY:}
+  public-base-url: ${PUBLIC_BASE_URL:}
+  wompi:
+    public-key: ${WOMPI_PUBLIC_KEY:}
+    integrity-secret: ${WOMPI_INTEGRITY_SECRET:}
 
 # One JSON object per log line; the MDC (correlationId) goes into every line (Anexo C 5.3.9).
 logging:
