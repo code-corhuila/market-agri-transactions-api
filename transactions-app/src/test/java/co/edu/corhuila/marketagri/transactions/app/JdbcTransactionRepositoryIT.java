@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.domain.model.Money;
+import co.edu.corhuila.marketagri.transactions.domain.model.AdminTransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Participant;
@@ -75,6 +76,25 @@ class JdbcTransactionRepositoryIT extends TransactionsIntegrationTest {
                     new PageRequest(1, 20)).items()).containsExactly(newer, failed);
             assertThat(repository.findPage(new TransactionFilter(Participant.PRODUCER, buyer, null),
                     new PageRequest(1, 20)).total()).isZero();
+        });
+    }
+
+    @Test
+    void adminFiltersByStatusProducerAndBuyerWithTheContractOrder() {
+        UUID buyer = UUID.randomUUID();
+        UUID producer = UUID.randomUUID();
+        new TransactionTemplate(transactionManager).executeWithoutResult(status -> {
+            status.setRollbackOnly();
+            Transaction older = add(open(buyer, producer, "2026-11-04T15:00:00Z"));
+            Transaction newer = add(open(buyer, producer, "2026-11-04T16:00:00Z").failedToOpen());
+            add(open(UUID.randomUUID(), producer, "2026-11-04T17:00:00Z"));
+
+            Page<Transaction> page = repository.findPage(new AdminTransactionFilter(null, producer, buyer),
+                    new PageRequest(1, 20));
+            assertThat(page.items()).containsExactly(newer, older);
+            assertThat(page.total()).isEqualTo(2);
+            assertThat(repository.findPage(new AdminTransactionFilter(TransactionStatus.FAILED, null, buyer),
+                    new PageRequest(1, 20)).items()).containsExactly(newer);
         });
     }
 }

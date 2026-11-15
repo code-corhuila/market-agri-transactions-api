@@ -7,6 +7,7 @@ import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionC
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
 import co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry;
+import co.edu.corhuila.marketagri.transactions.domain.model.AdminTransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
@@ -109,6 +110,13 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
 
     @Override
     public synchronized Page<Transaction> findPage(TransactionFilter filter, PageRequest request) {
+        List<Transaction> matching = transactions.values().stream().filter(filter::matches).sorted(E42_ORDER).toList();
+        return new Page<>(matching.stream().skip(request.offset()).limit(request.limit()).toList(), request,
+                matching.size());
+    }
+
+    @Override
+    public synchronized Page<Transaction> findPage(AdminTransactionFilter filter, PageRequest request) {
         List<Transaction> matching = transactions.values().stream().filter(filter::matches).sorted(E42_ORDER).toList();
         return new Page<>(matching.stream().skip(request.offset()).limit(request.limit()).toList(), request,
                 matching.size());

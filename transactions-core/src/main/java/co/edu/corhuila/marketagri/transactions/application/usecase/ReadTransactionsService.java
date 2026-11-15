@@ -4,6 +4,7 @@ import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransacti
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
+import co.edu.corhuila.marketagri.transactions.domain.model.AdminTransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionNotFoundException;
@@ -27,6 +28,16 @@ public final class ReadTransactionsService implements ReadTransactions {
 
     @Override
     public Page<Transaction> mine(TransactionFilter filter, PageRequest request) {
+        return transactions.findPage(filter, request);
+    }
+
+    @Override
+    public Transaction adminGet(UUID id) {
+        return transactions.findById(id).orElseThrow(() -> new TransactionNotFoundException(id));
+    }
+
+    @Override
+    public Page<Transaction> admin(AdminTransactionFilter filter, PageRequest request) {
         return transactions.findPage(filter, request);
     }
 }
