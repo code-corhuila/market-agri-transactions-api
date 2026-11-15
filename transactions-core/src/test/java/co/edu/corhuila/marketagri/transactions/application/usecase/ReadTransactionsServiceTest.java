@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.domain.model.DomainException;
 import co.edu.corhuila.marketagri.transactions.domain.model.Money;
+import co.edu.corhuila.marketagri.transactions.domain.model.AdminTransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Participant;
@@ -14,6 +15,7 @@ import co.edu.corhuila.marketagri.transactions.domain.model.PurchaseSnapshot;
 import co.edu.corhuila.marketagri.transactions.domain.model.Quantity;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionFilter;
+import co.edu.corhuila.marketagri.transactions.domain.model.TransactionStatus;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -39,6 +41,15 @@ class ReadTransactionsServiceTest {
 
         @Override
         public Page<Transaction> findPage(TransactionFilter filter, PageRequest request) {
+            List<Transaction> matching = stored.stream().filter(filter::matches)
+                    .sorted(Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id))
+                    .toList();
+            List<Transaction> page = matching.stream().skip(request.offset()).limit(request.limit()).toList();
+            return new Page<>(page, request, matching.size());
+        }
+
+        @Override
+        public Page<Transaction> findPage(AdminTransactionFilter filter, PageRequest request) {
             List<Transaction> matching = stored.stream().filter(filter::matches)
                     .sorted(Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id))
                     .toList();
@@ -99,5 +110,18 @@ class ReadTransactionsServiceTest {
         assertThat(service.mine(new TransactionFilter(Participant.BUYER, CARLOS, null), new PageRequest(2, 1))
                 .items()).containsExactly(older);
         assertThat(sales.total()).isEqualTo(3L);
+    }
+
+    @Test
+    void anAdminReadsAnyTransactionAndFiltersTheListByEveryOptionalField() {
+        Transaction pending = stored(CARLOS, ANA, "2026-11-04T15:00:00Z");
+        Transaction failed = stored(CARLOS, UUID.randomUUID(), "2026-11-04T16:00:00Z").failedToOpen();
+        repository.stored.set(1, failed);
+
+        assertThat(service.adminGet(pending.id())).isEqualTo(pending);
+        assertThat(service.admin(new AdminTransactionFilter(TransactionStatus.FAILED, null, CARLOS),
+                new PageRequest(1, 20)).items()).containsExactly(failed);
+        assertThat(service.admin(new AdminTransactionFilter(null, ANA, null), new PageRequest(1, 20))
+                .items()).containsExactly(pending);
     }
 }
