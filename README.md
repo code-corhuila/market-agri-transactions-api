@@ -1,25 +1,34 @@
 # market-agri-transactions-api
 
-> transactions bounded context: service API
+Service API of the **transactions** domain (payments, ledger, Stripe webhook, outbox) of the
+**Marketplace Agrícola Huila** distributed system: Java 21, Spring Boot 3.5, hexagonal architecture in
+three Maven modules (Anexo C). Contract: `market-agri-docs/07-api/api-contract.md` §4.4.
 
-Part of the **LMS Library** distributed system — team `lms-library`, Grupo 2.
-Governance and documentation live in [`library-docs`](https://github.com/code-corhuila/library-docs).
-
-## Branching
-
-Three permanent branches. **None of them accepts a direct commit** — you enter through a child
-branch and leave through a Pull Request.
+## Modules
 
 ```
-develop  <--PR--  feat/... fix/... chore/...
-qa       <--PR--  qa/...
-main     <--PR--  release/...  hotfix/...
+transactions-core/      domain/model, application/port/{in,out}, application/usecase — plain Java, no framework
+transactions-adapters/  adapter/in/http, adapter/out/persistence
+transactions-app/       composition root: entry point, wiring and every limit (application.yml)
+deploy/                 Dockerfile and compose.yml, included by market-agri-infra (no host port)
 ```
 
-Promotion happens **by re-application** (`git cherry-pick -x`), never by merging one permanent
-branch into another: `merge develop -> qa` and `merge qa -> main` do not exist in this model.
+`transactions-core` declares no framework: a Spring or JDBC type there does not compile. The schema and
+its migrations live in `market-agri-transactions-db` (ADR-011); this service connects as
+`transactions_app` and never migrates.
 
-`main` requires **1 approval from `ariel5253`**. On `develop` and `qa` the team sets its own review
-rule.
+## What the scaffold already does
 
-Full policy: `00-governance/branching-policy.md` in `library-docs`.
+| Rule | Where |
+|---|---|
+| `GET /health` → `200 {"status":"UP"}` without token (liveness, E-60) | `adapter/in/http/HealthController` |
+| One error body `{error, message, details, traceId}` from **one** handler (D-C21) | `adapter/in/http/ErrorHandler` |
+| `X-Correlation-Id` reused or generated, returned, as `traceId` and in every JSON log line (D-C28) | `adapter/in/http/CorrelationFilter` |
+
+## Run locally
+
+```bash
+./mvnw -B verify                      # build and tests (Windows: mvnw.cmd)
+java -jar transactions-app/target/transactions-app-0.0.1-SNAPSHOT.jar
+curl -i http://localhost:8080/health  # liveness, no token
+```
