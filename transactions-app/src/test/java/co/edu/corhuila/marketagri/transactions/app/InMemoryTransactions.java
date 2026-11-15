@@ -1,9 +1,12 @@
 package co.edu.corhuila.marketagri.transactions.app;
 
+import co.edu.corhuila.marketagri.transactions.application.port.out.Ledger;
+import co.edu.corhuila.marketagri.transactions.application.port.out.LedgerEntries;
 import co.edu.corhuila.marketagri.transactions.application.port.out.PaymentSettlements;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionCreations;
 import co.edu.corhuila.marketagri.transactions.application.port.out.TransactionRepository;
 import co.edu.corhuila.marketagri.transactions.application.port.out.UnitOfWork;
+import co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry;
 import co.edu.corhuila.marketagri.transactions.domain.model.Page;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
@@ -26,7 +29,8 @@ import java.util.function.Supplier;
  * first (ON CONFLICT), then the partial index of D-21, a rollback when the work throws, and the
  * order of E-42 ({@code createdAt} descending, then {@code id}), and the outbox of E-43.
  */
-final class InMemoryTransactions implements TransactionCreations, TransactionRepository, PaymentSettlements, UnitOfWork {
+final class InMemoryTransactions implements TransactionCreations, TransactionRepository, PaymentSettlements, Ledger,
+        LedgerEntries, UnitOfWork {
 
     private static final Comparator<Transaction> E42_ORDER =
             Comparator.comparing(Transaction::createdAt).reversed().thenComparing(Transaction::id);
@@ -34,11 +38,13 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
     private final Map<UUID, Transaction> transactions = new LinkedHashMap<>();
     private final Map<String, UUID> keys = new HashMap<>();
     private final List<TransactionEvent> outbox = new ArrayList<>();
+    private final List<LedgerEntry> ledger = new ArrayList<>();
 
     synchronized void clear() {
         transactions.clear();
         keys.clear();
         outbox.clear();
+        ledger.clear();
     }
 
     synchronized void put(Transaction transaction) {
@@ -57,6 +63,7 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
     public synchronized <T> T inTransaction(Supplier<T> work) {
         Map<UUID, Transaction> savedTransactions = new LinkedHashMap<>(transactions);
         Map<String, UUID> savedKeys = new HashMap<>(keys);
+        List<LedgerEntry> savedLedger = new ArrayList<>(ledger);
         try {
             return work.get();
         } catch (RuntimeException rollback) {
@@ -64,6 +71,8 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
             transactions.putAll(savedTransactions);
             keys.clear();
             keys.putAll(savedKeys);
+            ledger.clear();
+            ledger.addAll(savedLedger);
             throw rollback;
         }
     }
@@ -120,5 +129,20 @@ final class InMemoryTransactions implements TransactionCreations, TransactionRep
     public synchronized void settle(Transaction settled, TransactionEvent event) {
         transactions.put(settled.id(), settled);
         outbox.add(event);
+    }
+
+    @Override
+    public synchronized void add(LedgerEntry entry) {
+        ledger.add(entry);
+    }
+
+    @Override
+    public synchronized Map<UUID, LedgerEntry> findByTransactionIds(java.util.Collection<UUID> transactionIds) {
+        return ledger.stream().filter(entry -> transactionIds.contains(entry.transactionId()))
+                .collect(java.util.stream.Collectors.toMap(LedgerEntry::transactionId, entry -> entry));
+    }
+
+    synchronized List<LedgerEntry> ledger() {
+        return List.copyOf(ledger);
     }
 }

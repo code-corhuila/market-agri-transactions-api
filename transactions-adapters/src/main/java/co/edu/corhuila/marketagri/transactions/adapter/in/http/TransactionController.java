@@ -1,13 +1,16 @@
 package co.edu.corhuila.marketagri.transactions.adapter.in.http;
 
 import co.edu.corhuila.marketagri.transactions.application.port.in.ReadTransactions;
+import co.edu.corhuila.marketagri.transactions.application.port.out.LedgerEntries;
 import co.edu.corhuila.marketagri.transactions.domain.model.PageRequest;
 import co.edu.corhuila.marketagri.transactions.domain.model.Participant;
+import co.edu.corhuila.marketagri.transactions.domain.model.Transaction;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionFilter;
 import co.edu.corhuila.marketagri.transactions.domain.model.TransactionStatus;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestAttribute;
@@ -24,9 +27,11 @@ public class TransactionController {
     private static final String BUYER = "BUYER";
 
     private final ReadTransactions read;
+    private final LedgerEntries ledgerEntries;
 
-    public TransactionController(ReadTransactions read) {
+    public TransactionController(ReadTransactions read, LedgerEntries ledgerEntries) {
         this.read = read;
+        this.ledgerEntries = ledgerEntries;
     }
 
     /**
@@ -41,14 +46,29 @@ public class TransactionController {
         Participant side = BUYER.equals(caller.role()) ? Participant.BUYER : Participant.PRODUCER;
         TransactionFilter filter = new TransactionFilter(side, caller.userId(),
                 QueryParameters.code(query, "status", TransactionStatus.class));
-        return PageView.of(read.mine(filter, QueryParameters.pageRequest(query)), TransactionView::of);
+        var page = read.mine(filter, QueryParameters.pageRequest(query));
+        Map<UUID, co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry> ledgerByTransaction =
+                "PRODUCER".equals(caller.role()) ? ledgerEntries.findByTransactionIds(page.items().stream()
+                        .map(Transaction::id).collect(Collectors.toSet())) : Map.of();
+        return PageView.of(page, transaction -> viewOf(transaction, caller, ledgerByTransaction));
     }
 
     /** E-41: only a participant; an unknown id is {@code 404}, a malformed one {@code 400} (D-C23). */
     @RequiredRole({"BUYER", "PRODUCER"})
     @GetMapping("/{id}")
     public TransactionView get(@RequestAttribute(Caller.ATTRIBUTE) Caller caller, @PathVariable UUID id) {
-        return TransactionView.of(read.get(id, caller.userId()));
+        Transaction transaction = read.get(id, caller.userId());
+        Map<UUID, co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry> ledgerByTransaction =
+                "PRODUCER".equals(caller.role()) ? ledgerEntries.findByTransactionIds(Set.of(transaction.id())) : Map.of();
+        return viewOf(transaction, caller, ledgerByTransaction);
+    }
+
+    /** D-C14: a buyer must never receive the producer's disbursement record. */
+    private static TransactionView viewOf(Transaction transaction, Caller caller,
+                                          Map<UUID, co.edu.corhuila.marketagri.transactions.domain.model.LedgerEntry> ledgerByTransaction) {
+        boolean producerReadsOwnSale = "PRODUCER".equals(caller.role())
+                && transaction.purchase().producerId().equals(caller.userId());
+        return TransactionView.of(transaction, producerReadsOwnSale ? ledgerByTransaction.get(transaction.id()) : null);
     }
 
     /** Kept here so that {@link PageRequest} limits and messages stay next to the routes that use them. */

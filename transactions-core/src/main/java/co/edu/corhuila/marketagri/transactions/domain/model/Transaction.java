@@ -82,6 +82,18 @@ public record Transaction(UUID id, PurchaseSnapshot purchase, Money amount, Tran
                 result.gatewayTransactionId(), createdAt, expiresAt, now.truncatedTo(ChronoUnit.SECONDS), null);
     }
 
+    /**
+     * The entry owed to the producer, only for a CONFIRMED payment (AGGR-INV-006): the whole amount,
+     * no commission (AGGR-INV-006b), dated at the confirmation.
+     */
+    public LedgerEntry ledgerEntry() {
+        if (status != TransactionStatus.CONFIRMED) {
+            throw new IllegalStateException("no ledger entry for a " + status + " transaction (AGGR-INV-006): " + id);
+        }
+        return new LedgerEntry(id, purchase.producerId(), amount, LedgerEntry.NO_FEE,
+                LedgerStatus.PENDING_DISBURSEMENT, confirmedAt);
+    }
+
     /** A rejected result of the provider (declined, voided or an error) fails the payment (E-43). */
     public Transaction fail(PaymentResult result, Instant now) {
         requireSettleable(result, PaymentOutcome.REJECTED);
